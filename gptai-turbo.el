@@ -33,10 +33,12 @@
 (require 'gptai)
 
 (defvar url-http-end-of-headers)
+;; (defvar model-name "gpt-3.5-turbo" "chat gpt model to use")
+(defvar model-name "gpt-4-turbo" "chat gpt model to use")
 
 ;;;###autoload
 (defun gptai-turbo-request (gptai-prompt)
-  "Sends a request to OpenAI API's gpt-3.5-turbo endpoint and return the response.
+  "Sends a request to OpenAI API's turbo endpoint and return the response.
 Argument GPTAI-PROMPT is the prompt to send to the API."
   (when (null gptai-api-key)
     (error "OpenAI API key is not set"))
@@ -46,14 +48,14 @@ Argument GPTAI-PROMPT is the prompt to send to the API."
           `(("Content-Type" . "application/json")
             ("Authorization" . ,(format "Bearer %s" gptai-api-key))))
          (url-request-data
-          (json-encode `(("model" . "gpt-3.5-turbo")
+          (json-encode `(("model" . ,model-name)
                          ("messages" . [((role . "user") (content . ,gptai-prompt))])
                          ("temperature" . 0.7))))
          (url "https://api.openai.com/v1/chat/completions")
          (buffer (url-retrieve-synchronously url nil 'silent))
          response)
 
-    (message "Sending request to OpenAI API using model 'gpt-3.5-turbo'")
+    (message "Sending request to OpenAI API using model '%s'" model-name)
 
     (if buffer
       (with-current-buffer buffer
@@ -71,24 +73,20 @@ Argument GPTAI-PROMPT is the prompt to send to the API."
 
 ;;;###autoload
 (defun gptai-turbo-query (gptai-prompt)
-  "Sends a request to gpt-3.5-turbo and insert response at the current point.
+  "Sends a request to turbo and insert response at the current point.
 Argument GPTAI-PROMPT prompt to be sent."
   (interactive "sEnter your prompt: ")
   (let ((response (gptai-turbo-request gptai-prompt)))
     (insert response)))
 
-(defun gptai-turbo-query-region ()
-  "Sends a request to gpt-3.5-turbo using region and replace region w/ response at the current point."
-  (interactive )
-  (let ((gptai-prompt (if (use-region-p)
-                          (buffer-substring-no-properties
-                           (region-beginning)
-                           (region-end))
-                        (read-string "sEnter your prompt: "))))
-  (let ((response (gptai-turbo-request gptai-prompt)))
-    (delete-region (region-beginning)
-                   (region-end))
-    (insert response))))
+;;;###autoload
+(defun gptai-turbo-query-region (start end)
+  "Sends a request to turbo using region and replace region w/ response at the current point."
+  (interactive "r")
+  (let* ((region-text (buffer-substring-no-properties start end))
+         (response (gptai-turbo-request region-text)))
+    (insert (concat "
+" response))))
 
 (provide 'gptai-turbo)
 ;;; gptai-turbo.el ends here

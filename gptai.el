@@ -337,7 +337,7 @@ Argument FILEPATH filepath to download to."
           (let ((gptai-images gptai-image))
               (dolist (gptai-image gptai-images)
                 (async-shell-command (format "curl '%s' > %s/%s_%d.png" gptai-image filepath (format-time-string "%T") gptai-index))
-                (sleep-for 2 500)
+                (sleep-for 2)
                 (setq gptai-index (+ gptai-index 1))))
             (message "Finished downloading %d images to %s" n filepath))
       (error (error "Error while sending request to OpenAI Image Generation API: %s"
