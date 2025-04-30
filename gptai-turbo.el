@@ -33,8 +33,6 @@
 (require 'gptai)
 
 (defvar url-http-end-of-headers)
-;; (defvar model-name "gpt-3.5-turbo" "chat gpt model to use")
-(defvar model-name "gpt-4-turbo" "chat gpt model to use")
 
 ;;;###autoload
 (defun gptai-turbo-request (gptai-prompt)
@@ -48,14 +46,14 @@ Argument GPTAI-PROMPT is the prompt to send to the API."
           `(("Content-Type" . "application/json")
             ("Authorization" . ,(format "Bearer %s" gptai-api-key))))
          (url-request-data
-          (json-encode `(("model" . ,model-name)
+          (json-encode `(("model" . ,gptai-model)
                          ("messages" . [((role . "user") (content . ,gptai-prompt))])
-                         ("temperature" . 0.7))))
+                         ("temperature" . ,gptai-temperature))))
          (url "https://api.openai.com/v1/chat/completions")
          (buffer (url-retrieve-synchronously url nil 'silent))
          response)
 
-    (message "Sending request to OpenAI API using model '%s'" model-name)
+    (message "Sending request to OpenAI API using model '%s'" gptai-model)
 
     (if buffer
       (with-current-buffer buffer

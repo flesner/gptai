@@ -105,14 +105,14 @@ Argument GPTAI-PROMPT is the prompt to send to the API."
 
   (let* ((url-request-method "POST")
          (url-request-extra-headers
-          `(("Content-Type" . "application/json")
+          `(("Content-Type" . "application/json; charset=utf-8")
             ("Authorization" . ,(format "Bearer %s" gptai-api-key))))
          (url-request-data
           (json-encode `(("model" . ,gptai-model)
                          ("prompt" . ,gptai-prompt)
-                         ("temperature" . gptai-temperature)
-                         ("max_tokens" . gptai-max-tokens))))
-         (buffer (url-retrieve-synchronously gptai-base-url nil 'silent))
+                         ("temperature" . ,gptai-temperature)
+                         ("max_tokens" . ,gptai-max-tokens))))
+         (buffer (url-retrieve-synchronously gptai-chat-url nil 'silent))
          response)
 
     (message "Sending request to OpenAI API using model '%s'" gptai-model)
