@@ -72,8 +72,22 @@
 (require 'json)
 
 ;; default values for local variables
-(defvar gptai-base-url "https://api.openai.com/v1/completions")
-(defvar gptai-chat-url "https://api.openai.com/v1/chat/completions")
+(defcustom gptai-base-url "https://api.openai.com/v1/completions"
+  "API base url for OpenAI completions endpoint."
+  :type 'string
+  :group 'gptai)
+(defcustom gptai-models-url "https://api.openai.com/v1/models"
+  "API url for listing OpenAI models."
+  :type 'string
+  :group 'gptai)
+(defcustom gptai-chat-url "https://api.openai.com/v1/chat/completions"
+  "API url for OpenAI chat endpoint."
+  :type 'string
+  :group 'gptai)
+(defcustom gptai-images-url "https://api.openai.com/v1/images/generations"
+  "API base url for generating OpenAI images."
+  :type 'string
+  :group 'gptai)
 (defcustom gptai-model ""
   "API Model for OpenAI."
   :type 'string
@@ -112,7 +126,7 @@ Argument GPTAI-PROMPT is the prompt to send to the API."
                          ("prompt" . ,gptai-prompt)
                          ("temperature" . ,gptai-temperature)
                          ("max_tokens" . ,gptai-max-tokens))))
-         (buffer (url-retrieve-synchronously gptai-chat-url nil 'silent))
+         (buffer (url-retrieve-synchronously gptai-base-url nil 'silent))
          response)
 
     (message "Sending request to OpenAI API using model '%s'" gptai-model)
@@ -300,7 +314,7 @@ Argument FILEPATH filepath to download to."
          (read-directory-name "Enter output directory: " "~/Pictures")))
   (when (null gptai-api-key)
     (error "OpenAI API key is not set"))
-  (let* ((url "https://api.openai.com/v1/images/generations")
+  (let* ((url (custom-value 'gptai-images-url))
          (url-request-method "POST")
          (url-request-extra-headers
           `(("Content-Type" . "application/json")
@@ -348,8 +362,8 @@ Argument FILEPATH filepath to download to."
   (interactive)
   (with-current-buffer (get-buffer-create "*gptai-models*")
     (erase-buffer)
-    (async-shell-command (format "curl https://api.openai.com/v1/models \
-    -H 'Authorization: Bearer %s'" gptai-api-key) "*gptai-models*" "*Messages*")
+    (async-shell-command (format "curl %s \
+    -H 'Authorization: Bearer %s'" gptai-models-url gptai-api-key) "*gptai-models*" "*Messages*")
     (goto-char (point-min))
     (re-search-forward "^.*object.*$")
     (delete-region (point-min) (point))
