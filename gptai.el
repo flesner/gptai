@@ -100,7 +100,7 @@
   "Temperature for API requests"
   :type 'int
   :group 'gptai)
-(defcustom gptai-max-tokens 1000
+(defcustom gptai-max-tokens 5000
   "Max Tokens for API requests"
   :type 'int
   :group 'gptai)
