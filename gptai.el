@@ -105,15 +105,38 @@
   :group 'gptai)
 (defvar gptai-turbo-dispatch)
 (defvar url-http-end-of-headers)
+(defvar url-http-response-status)
 (defvar gptai-image)
 (defvar gptai-images)
 (defvar gptai-indn)
 (defvar gptai-index)
 
+(defcustom gptai-max-retries 4
+  "How many times to retry on a transient OpenAI error (429/5xx/529)."
+  :type 'integer
+  :group 'gptai)
+
+(defcustom gptai-timeout 60
+  "Seconds to wait for an OpenAI response before giving up."
+  :type 'integer
+  :group 'gptai)
+
+(defun gptai--error-blurb ()
+  "Return a short error message from the response buffer (point at body start)."
+  (condition-case nil
+      (let ((resp (save-excursion (json-read))))
+        (or (cdr (assoc 'message (cdr (assoc 'error resp))))
+            (format "%S" resp)))
+    (error (buffer-substring-no-properties
+            (point) (min (point-max) (+ (point) 300))))))
+
 (defun gptai-request (gptai-prompt)
   "Sends a request to OpenAI API and return the response.
-Argument GPTAI-PROMPT is the prompt to send to the API."
-  (when (null gptai-api-key)
+Argument GPTAI-PROMPT is the prompt to send to the API.
+
+Inspects the HTTP status code, retries transient errors (429/5xx/529) with
+exponential backoff, and signals a clear error otherwise."
+  (when (or (null gptai-api-key) (string-empty-p gptai-api-key))
     (error "OpenAI API key is not set"))
 
   (let* ((url-request-method "POST")
@@ -121,27 +144,48 @@ Argument GPTAI-PROMPT is the prompt to send to the API."
           `(("Content-Type" . "application/json; charset=utf-8")
             ("Authorization" . ,(format "Bearer %s" gptai-api-key))))
          (url-request-data
-          (json-encode `(("model" . ,gptai-model)
-                         ("prompt" . ,gptai-prompt)
-                         ("temperature" . ,gptai-temperature)
-                         ("max_tokens" . ,gptai-max-tokens))))
-         (buffer (url-retrieve-synchronously gptai-base-url nil 'silent))
-         response)
+          (encode-coding-string
+           (json-encode `(("model" . ,gptai-model)
+                          ("prompt" . ,gptai-prompt)
+                          ("temperature" . ,gptai-temperature)
+                          ("max_tokens" . ,gptai-max-tokens)))
+           'utf-8))
+         (attempt 0)
+         result)
 
-    (message "Sending request to OpenAI API using model '%s'" gptai-model)
-
-    (if buffer
-        (with-current-buffer buffer
-          (goto-char url-http-end-of-headers)
-          (condition-case gptai-err
-              (progn
-                (setq response (json-read))
-                (if (assoc 'error response)
-                    (error (cdr (assoc 'message (cdr (assoc 'error response)))))
-                  response))
-            (error (error "Error while parsing OpenAI API response: %s"
-                          (error-message-string gptai-err)))))
-      (error "Failed to send request to OpenAI API"))))
+    (while (not result)
+      (setq attempt (1+ attempt))
+      (message "Sending request to OpenAI API using model '%s' (attempt %d)"
+               gptai-model attempt)
+      (let ((buffer (url-retrieve-synchronously gptai-base-url nil 'silent gptai-timeout)))
+        (unless buffer
+          (error "No response from OpenAI API (timeout after %ss)" gptai-timeout))
+        (unwind-protect
+            (with-current-buffer buffer
+              (let ((status (or url-http-response-status 0)))
+                (goto-char (or url-http-end-of-headers (point-min)))
+                (cond
+                 ;; success
+                 ((and (>= status 200) (< status 300))
+                  (let ((response (json-read)))
+                    (if (assoc 'error response)
+                        (error "OpenAI API error: %s"
+                               (cdr (assoc 'message (cdr (assoc 'error response)))))
+                      (setq result response))))
+                 ;; transient -> retry with exponential backoff
+                 ((memq status '(429 500 502 503 529))
+                  (if (>= attempt gptai-max-retries)
+                      (error "OpenAI API still failing after %d attempts (HTTP %d): %s"
+                             attempt status (gptai--error-blurb))
+                    (let ((wait (expt 2 attempt)))
+                      (message "OpenAI returned HTTP %d; retrying in %ds..." status wait)
+                      (sleep-for wait))))
+                 ;; permanent error
+                 (t
+                  (error "OpenAI API request failed (HTTP %d): %s"
+                         status (gptai--error-blurb))))))
+          (kill-buffer buffer))))
+    result))
 
 (defun gptai-send-query (gptai-prompt)
   "Sends a query to OpenAI API and insert the response text at the current point.
